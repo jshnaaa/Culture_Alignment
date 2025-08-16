@@ -66,9 +66,9 @@ class CultureAlignmentDataset(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         # 使用prompt_question_country作为输入
-        text = item['prompt_question_country']
+        text = item['prompt'] + item['query']
         # 使用answer作为标签，TRUE->1, FALSE->0
-        label = 1 if item['answer'] == 'TRUE' else 0
+        label = 1 if item['response'] == 'TRUE' else 0
 
         # 文本编码
         encoding = self.tokenizer(
@@ -292,8 +292,8 @@ def predict_single_text(model, tokenizer, text, device, max_length=512):
 # 8. 主执行部分
 if __name__ == "__main__":
     # 数据路径（需要根据实际路径修改）
-    train_data_path = "CulturalBench-Hard_train.json"  # 训练数据路径
-    val_data_path = "CulturalBench-Hard_test.json"      # 验证数据路径（可选）
+    train_data_path = "data/CulturalBench-Hard_train.json"  # 训练数据路径
+    val_data_path = "data/CulturalBench-Hard_test.json"  # 验证数据路径（可选）
 
     # 创建数据集
     print("正在加载数据集...")
