@@ -86,7 +86,7 @@ class CultureAlignmentDataset(Dataset):
         }
 
 # 2. 加载Llama 3.1模型和tokenizer
-model_path = "meta-llama/Llama-3.1-8B-Instruct"
+model_path = "Meta-Llama-3.1-8B-Instruct"
 
 # 检查GPU可用性
 device = get_device()
@@ -111,7 +111,7 @@ else:
     # CPU模式
     llama_model = AutoModel.from_pretrained(model_path)
 
-print(f"✅ 模型加载完成，参数量: {sum(p.numel() for p in llama_model.parameters()) / 1e9:.1f}B")
+print(f" 模型加载完成，参数量: {sum(p.numel() for p in llama_model.parameters()) / 1e9:.1f}B")
 
 # 3. 定义分类头模型（二分类）
 class BinaryClassificationHead(nn.Module):
@@ -227,9 +227,9 @@ def train_model(model, train_loader, val_loader, epochs=3, lr=1e-5, use_amp=True
         train_acc = accuracy_score(all_labels, all_preds)
         avg_loss = total_loss / len(train_loader)
 
-        print(f'✅ Epoch {epoch+1}/{epochs} 完成:')
-        print(f'  📉 训练损失: {avg_loss:.4f}')
-        print(f'  📊 训练准确率: {train_acc:.4f}')
+        print(f' Epoch {epoch+1}/{epochs} 完成:')
+        print(f'   训练损失: {avg_loss:.4f}')
+        print(f'   训练准确率: {train_acc:.4f}')
 
         # 验证阶段
         if val_loader:
