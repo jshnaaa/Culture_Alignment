@@ -17,7 +17,7 @@ def test_base_expert_network():
     print("="*70)
 
     input_dim = 4096  # Llama hidden size
-    hidden_dim = 768
+    hidden_dim = 512
     output_dim = 256
 
     # 创建基础网络

@@ -4,7 +4,20 @@ from typing import Tuple, Dict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from peft import LoraConfig, get_peft_model, TaskType
+
+try:
+    from peft import LoraConfig, get_peft_model, TaskType
+    PEFT_AVAILABLE = True
+except ImportError:
+    logging.warning("PEFT library not available. LoRA functionality will be limited.")
+    PEFT_AVAILABLE = False
+    # 定义空的占位符类
+    class LoraConfig:
+        pass
+    class TaskType:
+        FEATURE_EXTRACTION = "FEATURE_EXTRACTION"
+    def get_peft_model(model, config):
+        return model
 
 class BaseExpertNetwork(nn.Module):
     """
@@ -24,8 +37,27 @@ class BaseExpertNetwork(nn.Module):
             nn.Linear(hidden_dim, output_dim)
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.network(x)
+    def forward(self, x: torch.Tensor = None, input_ids: torch.Tensor = None, **kwargs) -> torch.Tensor:
+        """
+        前向传播，兼容PEFT库的调用方式
+
+        Args:
+            x: 直接的输入张量
+            input_ids: PEFT库传递的输入（实际上就是特征张量）
+            **kwargs: 其他可能的参数
+
+        Returns:
+            output: 网络输出
+        """
+        # 处理PEFT库的调用方式
+        if x is not None:
+            input_tensor = x
+        elif input_ids is not None:
+            input_tensor = input_ids
+        else:
+            raise ValueError("Either 'x' or 'input_ids' must be provided")
+
+        return self.network(input_tensor)
 
 
 class LoRAExpert(nn.Module):
@@ -80,6 +112,11 @@ class LoRAExpert(nn.Module):
         # 3. 将基础模型转换为LoRA模型
         self.model = get_peft_model(self.base_model, lora_config)
 
+        # 4. 记录初始参数状态（PEFT默认状态）
+        self._original_requires_grad = {}
+        for name, param in self.model.named_parameters():
+            self._original_requires_grad[name] = param.requires_grad
+
         logging.info(f"PEFT LoRA Expert {expert_id} initialized with r={lora_r}, alpha={lora_alpha}")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -103,9 +140,19 @@ class LoRAExpert(nn.Module):
                 param.requires_grad = False
 
     def unfreeze_base_layers(self):
-        """解冻所有基础层"""
-        for name, param in self.model.named_parameters():
-            param.requires_grad = True
+        """解冻基础层，恢复到原始的PEFT状态"""
+        # 如果有记录的原始状态，恢复到那个状态
+        if hasattr(self, '_original_requires_grad'):
+            for name, param in self.model.named_parameters():
+                if name in self._original_requires_grad:
+                    param.requires_grad = self._original_requires_grad[name]
+        else:
+            # 如果没有记录，按PEFT默认方式：只训练LoRA参数
+            for name, param in self.model.named_parameters():
+                if 'lora_' in name.lower():
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
 
     def get_lora_parameters(self):
         """获取LoRA参数（用于优化器）"""
