@@ -43,8 +43,8 @@ class ModelArgs:
 
     # Output paths
     output_dir: str = "outputs"
-    model_save_path: str = "outputs/best_model"
-    log_file: str = "outputs/training.log"
+    model_save_path: str = "outputs/CA_llama"
+    log_file: str = "outputs/CA_llama_training.log"
 
     def __post_init__(self):
         if self.target_modules is None:
