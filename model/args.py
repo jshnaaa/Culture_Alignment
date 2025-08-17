@@ -18,7 +18,7 @@ class ModelArgs:
     lora_r: int = 8
     lora_alpha: int = 32
     lora_dropout: float = 0.1
-    target_modules: list = None
+    target_modules: list = None # 目标模块的选择将由 LoRA 的实现自动决定，=all：LoRA 将尝试在模型中的所有可支持的线性层上应用 LoRA
 
     # Training parameters
     learning_rate: float = 5e-5
