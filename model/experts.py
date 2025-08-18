@@ -11,9 +11,21 @@ try:
 except ImportError:
     logging.warning("PEFT library not available. LoRA functionality will be limited.")
     PEFT_AVAILABLE = False
-    # 定义空的占位符类
+
+    # 定义完整的备用类
     class LoraConfig:
-        pass
+        """LoRA配置类的备用实现"""
+        def __init__(self, task_type=None, inference_mode=False, r=8, lora_alpha=32,
+                     lora_dropout=0.1, target_modules=None, **kwargs):
+            self.task_type = task_type
+            self.inference_mode = inference_mode
+            self.r = r
+            self.lora_alpha = lora_alpha
+            self.lora_dropout = lora_dropout
+            self.target_modules = target_modules or []
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
     class TaskType:
         FEATURE_EXTRACTION = "FEATURE_EXTRACTION"
     def get_peft_model(model, config):
