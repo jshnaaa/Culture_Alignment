@@ -12,6 +12,9 @@ from .args import ModelArgs
 from .experts import ExpertLayer
 from .router import ExpertRouter, AdaptiveRouter
 
+from transformers import AutoConfig
+
+
 
 class CulturalAlignmentModel(nn.Module):
     """
@@ -28,14 +31,23 @@ class CulturalAlignmentModel(nn.Module):
         # 自动加载与 Llama3.1 模型配套的分词器（tokenizer）
         # tokenizer 将文本（字符串）转换为模型可以处理的 token ID（整数序列），并生成 attention mask 等输入信息。
         self.tokenizer = AutoTokenizer.from_pretrained(args.llama_model_path)
+        # 加载模型配置
+        config = AutoConfig.from_pretrained(args.llama_model_path)
+
+        # 修改 rope_scaling 配置
+        config.rope_scaling = {
+            "type": "llama",  # 或者 "llama3"，根据需要设置
+            "factor": 8.0
+        }
 
         # 优先尝试以8位量化（节省内存）方式加载Llama3.1模型，若失败则自动回退到float32精度加载
         try:
             # 首先尝试8位量化（如果可用）
             self.llama_model = AutoModelForCausalLM.from_pretrained(
                 args.llama_model_path,
+                config=config,
                 torch_dtype=torch.float16,
-                device_map="cpu",  # 强制使用CPU，因为大模型参数量巨大，如果直接加载到GPU上，可能会因为显存不足而导致加载失败或者OOM（Out of Memory）。CPU内存通常比GPU显存大得多
+                device_map="cpu",
                 trust_remote_code=True,
                 low_cpu_mem_usage=True,
                 load_in_8bit=True,
@@ -46,6 +58,7 @@ class CulturalAlignmentModel(nn.Module):
             # 如果8位量化失败，使用CPU + float32
             self.llama_model = AutoModelForCausalLM.from_pretrained(
                 args.llama_model_path,
+                config=config,
                 torch_dtype=torch.float32,  # 使用float32可能更稳定
                 device_map="cpu",
                 trust_remote_code=True,
