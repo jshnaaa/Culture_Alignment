@@ -35,10 +35,10 @@ class CulturalAlignmentModel(nn.Module):
         config = AutoConfig.from_pretrained(args.llama_model_path)
 
         # 修改 rope_scaling 配置
-        config.rope_scaling = {
-            "type": "llama",  # 或者 "llama3"，根据需要设置
-            "factor": 8.0
-        }
+        # config.rope_scaling = {
+        #     "type": "llama",  # 或者 "llama3"，根据需要设置
+        #     "factor": 8.0
+        # }
 
         # 优先尝试以8位量化（节省内存）方式加载Llama3.1模型，若失败则自动回退到float32精度加载
         try:
