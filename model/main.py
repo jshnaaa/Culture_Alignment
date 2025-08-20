@@ -41,31 +41,40 @@ class CulturalAlignmentModel(nn.Module):
         # }
 
         # 优先尝试以8位量化（节省内存）方式加载Llama3.1模型，若失败则自动回退到float32精度加载
-        try:
-            # 首先尝试8位量化（如果可用）
-            self.llama_model = AutoModelForCausalLM.from_pretrained(
-                args.llama_model_path,
-                config=config,
-                torch_dtype=torch.float16,
-                device_map="auto",
-                trust_remote_code=True,
-                low_cpu_mem_usage=True,
-                load_in_8bit=True,  # 保留 8 位量化
-                offload_folder="./offload"  # 添加 offload 文件夹
-            )
-            logging.info("Successfully loaded with 8-bit quantization")
-        except Exception as e:
-            logging.warning(f"8-bit quantization failed: {e}, trying alternative loading...")
-            # 如果8位量化失败，使用CPU + float32
-            self.llama_model = AutoModelForCausalLM.from_pretrained(
-                args.llama_model_path,
-                config=config,
-                torch_dtype=torch.float32,  # 使用float32可能更稳定
-                # device_map="auto",
-                trust_remote_code=True,
-                low_cpu_mem_usage=True,
-            )
-            logging.info("Successfully loaded with CPU + float32")
+        # try:
+        #     # 首先尝试8位量化（如果可用）
+        #     self.llama_model = AutoModelForCausalLM.from_pretrained(
+        #         args.llama_model_path,
+        #         config=config,
+        #         torch_dtype=torch.float16,
+        #         device_map="auto",
+        #         trust_remote_code=True,
+        #         low_cpu_mem_usage=True,
+        #         load_in_8bit=True,  # 保留 8 位量化
+        #         offload_folder="./offload"  # 添加 offload 文件夹
+        #     )
+        #     logging.info("Successfully loaded with 8-bit quantization")
+        # except Exception as e:
+        #     logging.warning(f"8-bit quantization failed: {e}, trying alternative loading...")
+        #     # 如果8位量化失败，使用CPU + float32
+        #     self.llama_model = AutoModelForCausalLM.from_pretrained(
+        #         args.llama_model_path,
+        #         config=config,
+        #         torch_dtype=torch.float32,  # 使用float32可能更稳定
+        #         # device_map="auto",
+        #         trust_remote_code=True,
+        #         low_cpu_mem_usage=True,
+        #     )
+        #     logging.info("Successfully loaded with CPU + float32")
+        self.llama_model = AutoModelForCausalLM.from_pretrained(
+            args.llama_model_path,
+            config=config,
+            torch_dtype=torch.float32,  # 使用float32可能更稳定
+            # device_map="auto",
+            trust_remote_code=True,
+            low_cpu_mem_usage=True,
+        )
+        logging.info("Successfully loaded with CPU + float32")
 
         # 设置padding token，确保tokenizer有一个有效的 padding token，以便对输入文本进行批量处理时能够正确填充（padding）
         if self.tokenizer.pad_token is None:
