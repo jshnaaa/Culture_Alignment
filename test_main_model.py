@@ -9,7 +9,7 @@ import torch
 
 from model.args import ModelArgs
 from model.main import CulturalAlignmentModel
-
+from torch.nn import DataParallel
 
 def test_model_initialization():
     """测试模型初始化"""
@@ -37,6 +37,12 @@ def test_model_initialization():
         print(f"  LoRA配置: r={args.lora_r}, alpha={args.lora_alpha}")
 
         model = CulturalAlignmentModel(args)
+
+        # 使用DataParallel来支持多GPU训练
+        if torch.cuda.device_count() > 1:
+            print(f"使用 {torch.cuda.device_count()} 张 GPU 进行训练")
+            model = DataParallel(model)  # 将模型包装为DataParallel，支持多卡训练
+
         model = model.to(args.device)
 
         print(f"✓ 模型创建成功")

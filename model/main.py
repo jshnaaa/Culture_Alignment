@@ -60,7 +60,7 @@ class CulturalAlignmentModel(nn.Module):
                 args.llama_model_path,
                 config=config,
                 torch_dtype=torch.float32,  # 使用float32可能更稳定
-                device_map="auto",
+                # device_map="auto",
                 trust_remote_code=True,
                 low_cpu_mem_usage=True,
             )
