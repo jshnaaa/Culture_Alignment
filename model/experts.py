@@ -4,6 +4,7 @@ from typing import Tuple, Dict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from enum import Enum
 
 try:
     from peft import LoraConfig, get_peft_model, TaskType
@@ -26,7 +27,7 @@ except ImportError:
             for key, value in kwargs.items():
                 setattr(self, key, value)
 
-    class TaskType:
+    class TaskType((Enum)):
         FEATURE_EXTRACTION = "FEATURE_EXTRACTION"
     def get_peft_model(model, config):
         return model
