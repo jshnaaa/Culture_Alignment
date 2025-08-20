@@ -6,31 +6,38 @@ import torch.nn as nn
 import torch.nn.functional as F
 from enum import Enum
 
-try:
-    from peft import LoraConfig, get_peft_model, TaskType
-    PEFT_AVAILABLE = True
-except ImportError:
-    logging.warning("PEFT library not available. LoRA functionality will be limited.")
-    PEFT_AVAILABLE = False
-
-    # 定义完整的备用类
-    class LoraConfig:
-        """LoRA配置类的备用实现"""
-        def __init__(self, task_type=None, inference_mode=False, r=8, lora_alpha=32,
-                     lora_dropout=0.1, target_modules=None, **kwargs):
-            self.task_type = task_type
-            self.inference_mode = inference_mode
-            self.r = r
-            self.lora_alpha = lora_alpha
-            self.lora_dropout = lora_dropout
-            self.target_modules = target_modules or []
-            for key, value in kwargs.items():
-                setattr(self, key, value)
-
-    class TaskType(Enum):
-        FEATURE_EXTRACTION = "FEATURE_EXTRACTION"
-    def get_peft_model(model, config):
-        return model
+from peft import LoraConfig, get_peft_model, TaskType
+PEFT_AVAILABLE = True
+# try:
+#     from peft import LoraConfig, get_peft_model, TaskType
+#     PEFT_AVAILABLE = True
+# except ImportError:
+#     logging.warning("PEFT library not available. LoRA functionality will be limited.")
+#     PEFT_AVAILABLE = False
+#
+#     # 定义完整的备用类
+#     class LoraConfig:
+#         """LoRA配置类的备用实现"""
+#         def __init__(self, task_type=None, inference_mode=False, r=8, lora_alpha=32,
+#                      lora_dropout=0.1, target_modules=None, **kwargs):
+#             self.task_type = task_type
+#             self.inference_mode = inference_mode
+#             self.r = r
+#             self.lora_alpha = lora_alpha
+#             self.lora_dropout = lora_dropout
+#             self.target_modules = target_modules or []
+#             for key, value in kwargs.items():
+#                 setattr(self, key, value)
+#
+#     # 修复：添加FEATURE_EXTRACTION到TaskType枚举
+#     class TaskType(Enum):
+#         FEATURE_EXTRACTION = "FEATURE_EXTRACTION"
+#         CAUSAL_LM = "CAUSAL_LM"  # 添加其他常见任务类型
+#         SEQ_CLS = "SEQ_CLS"
+#         SEQ_2_SEQ_LM = "SEQ_2_SEQ_LM"
+#         TOKEN_CLS = "TOKEN_CLS"
+#     def get_peft_model(model, config):
+#         return model
 
 class BaseExpertNetwork(nn.Module):
     """
@@ -113,14 +120,35 @@ class LoRAExpert(nn.Module):
         self.base_model = BaseExpertNetwork(input_dim, hidden_dim, output_dim, dropout)
 
         # 2. 使用PEFT库应用LoRA
+        # 检查TaskType中可用的成员
+        available_task_types = [attr for attr in dir(TaskType) if not attr.startswith('_')]
+        logging.info(f"Available TaskType members: {available_task_types}")
+
+        # 根据PEFT版本选择合适的任务类型
+        if hasattr(TaskType, 'FEATURE_EXTRACTION'):
+            task_type = TaskType.FEATURE_EXTRACTION
+        elif hasattr(TaskType, 'CAUSAL_LM'):
+            task_type = TaskType.CAUSAL_LM  # 使用其他合适的任务类型
+        else:
+            # 如果都没有，使用第一个可用的任务类型
+            task_type = getattr(TaskType, available_task_types[0]) if available_task_types else None
+
         lora_config = LoraConfig(
-            task_type=TaskType.FEATURE_EXTRACTION,  # 任务类型
-            inference_mode=False,  # 训练模式
-            r=lora_r,  # LoRA的秩
-            lora_alpha=lora_alpha,  # LoRA的缩放参数
-            lora_dropout=lora_dropout,  # LoRA的dropout
-            target_modules=["network.0", "network.3", "network.6"],  # 要应用LoRA的线性层
+            task_type=task_type,  # 使用动态选择的任务类型
+            inference_mode=False,
+            r=lora_r,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            target_modules=["network.0", "network.3", "network.6"],
         )
+        # lora_config = LoraConfig(
+        #     task_type=TaskType.FEATURE_EXTRACTION,  # 任务类型
+        #     inference_mode=False,  # 训练模式
+        #     r=lora_r,  # LoRA的秩
+        #     lora_alpha=lora_alpha,  # LoRA的缩放参数
+        #     lora_dropout=lora_dropout,  # LoRA的dropout
+        #     target_modules=["network.0", "network.3", "network.6"],  # 要应用LoRA的线性层
+        # )
 
         # 3. 将基础模型转换为LoRA模型
         self.model = get_peft_model(self.base_model, lora_config)
