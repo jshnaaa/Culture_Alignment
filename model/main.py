@@ -50,7 +50,8 @@ class CulturalAlignmentModel(nn.Module):
                 device_map="auto",
                 trust_remote_code=True,
                 low_cpu_mem_usage=True,
-                load_in_8bit=True,
+                load_in_8bit=True,  # 保留 8 位量化
+                offload_folder="./offload"  # 添加 offload 文件夹
             )
             logging.info("Successfully loaded with 8-bit quantization")
         except Exception as e:
