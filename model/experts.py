@@ -1,10 +1,11 @@
+from enum import Enum
 import logging
 from typing import Tuple, Dict
+from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from enum import Enum
 
 from peft import LoraConfig, get_peft_model, TaskType
 PEFT_AVAILABLE = True
@@ -38,6 +39,13 @@ PEFT_AVAILABLE = True
 #         TOKEN_CLS = "TOKEN_CLS"
 #     def get_peft_model(model, config):
 #         return model
+# 为BaseExpertNetwork添加一个简单的配置类
+@dataclass
+class BaseModelConfig:
+    input_dim: int
+    hidden_dim: int
+    output_dim: int
+    dropout: float = 0.1
 
 class BaseExpertNetwork(nn.Module):
     """
@@ -47,6 +55,7 @@ class BaseExpertNetwork(nn.Module):
 
     def __init__(self, input_dim: int, hidden_dim: int, output_dim: int, dropout: float = 0.1):
         super().__init__()
+        self.config = BaseModelConfig(input_dim, hidden_dim, output_dim, dropout)
         self.network = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
