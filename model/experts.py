@@ -27,7 +27,7 @@ except ImportError:
             for key, value in kwargs.items():
                 setattr(self, key, value)
 
-    class TaskType((Enum)):
+    class TaskType(Enum):
         FEATURE_EXTRACTION = "FEATURE_EXTRACTION"
     def get_peft_model(model, config):
         return model
