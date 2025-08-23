@@ -312,118 +312,99 @@ def plot_confusion_matrix(labels: np.ndarray, predictions: np.ndarray, save_path
     plt.ylabel('True Label')
     plt.xlabel('Predicted Label')
     plt.tight_layout()
-    plt.savefig(save_path)
+        plt.savefig(save_path)
     plt.close()
 
-def print_predictions(outputs: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor], step: int):
+def print_predictions(outputs: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor], step: int, verbose: bool = True):
     """
-    打印模型预测结果
+    打印模型预测结果（支持简化和详细两种模式）
 
     Args:
         outputs: 模型输出字典，包含logits等
         batch: 输入批次数据
         step: 当前训练步数
+        verbose: 是否显示详细信息
     """
     try:
-        # 获取logits并计算预测概率
-        logits = outputs["logits"]  # [batch_size, num_classes]
+        logits = outputs["logits"]
         predicted_probs = torch.softmax(logits, dim=-1)
 
-        print(f"\n=== Step {step} - Predictions ===")
+        if not verbose:
+            # 简化版：一行显示关键信息
+            if "target_probs" in batch:
+                # GlobalOpinions数据集
+                target_probs = batch["target_probs"]
+                pred_values = predicted_probs[0].detach().cpu().numpy()
+                target_values = target_probs[0].detach().cpu().numpy()
 
-        if "target_probs" in batch:
-            # GlobalOpinions数据集 - 概率分布预测
-            target_probs = batch["target_probs"]
-            batch_size = min(2, logits.size(0))  # 最多显示2个样本
-
-            print("GlobalOpinions Dataset - Probability Distribution Prediction:")
-            print("Classes: ['Very favorable', 'Somewhat favorable', 'Somewhat unfavorable', 'Very unfavorable', 'DK/Refused']")
-
-            for i in range(batch_size):
-                print(f"\nSample {i+1}:")
-                if "prompt" in batch:
-                    # 截断过长的prompt
-                    prompt_text = batch["prompt"][i][:100] + "..." if len(batch["prompt"][i]) > 100 else batch["prompt"][i]
-                    print(f"  Question: {prompt_text}")
-
-                # 打印预测概率分布（保留3位小数）
-                pred_values = predicted_probs[i].detach().cpu().numpy()
-                target_values = target_probs[i].detach().cpu().numpy()
-
-                print(f"  Predicted:  [{', '.join([f'{val:.3f}' for val in pred_values])}]")
-                print(f"  Target:     [{', '.join([f'{val:.3f}' for val in target_values])}]")
-
-                # 计算单个样本的JS散度
-                pred_np = pred_values / pred_values.sum()  # 归一化
-                target_np = target_values / target_values.sum()  # 归一化
+                # 计算JS散度
+                pred_np = pred_values / pred_values.sum()
+                target_np = target_values / target_values.sum()
                 m = (pred_np + target_np) / 2
                 epsilon = 1e-8
-
                 kl_pm = np.sum(pred_np * np.log((pred_np + epsilon) / (m + epsilon)))
                 kl_qm = np.sum(target_np * np.log((target_np + epsilon) / (m + epsilon)))
                 js_div = 0.5 * (kl_pm + kl_qm)
                 js_similarity = 1 - js_div
 
-                print(f"  JS Divergence: {js_div:.6f}, JS Similarity: {js_similarity:.6f}")
+                pred_class = torch.argmax(predicted_probs[0]).item()
+                target_class = torch.argmax(target_probs[0]).item()
+                class_names = ['VeryFav', 'SomeFav', 'SomeUnfav', 'VeryUnfav', 'DK']
 
-                # 显示最高概率的预测类别
-                pred_class = torch.argmax(predicted_probs[i]).item()
-                target_class = torch.argmax(target_probs[i]).item()
-                class_names = ['Very favorable', 'Somewhat favorable', 'Somewhat unfavorable', 'Very unfavorable', 'DK/Refused']
-                print(f"  Predicted Class: {class_names[pred_class]} (prob: {pred_values[pred_class]:.3f})")
-                print(f"  Target Class: {class_names[target_class]} (prob: {target_values[target_class]:.3f})")
+                print(f"[Step {step}] Pred:{class_names[pred_class]}, Target:{class_names[target_class]}, JS_sim:{js_similarity:.3f}")
 
-                # 显示国家信息（如果有的话）
-                if "country" in batch:
-                    print(f"  Country: {batch['country'][i]}")
+            elif "labels" in batch:
+                # CulturalBench数据集
+                labels = batch["labels"]
+                predictions = torch.argmax(logits, dim=-1)
+                pred_label = predictions[0].item()
+                true_label = labels[0].item()
+                pred_prob = predicted_probs[0].detach().cpu().numpy()
 
-                # 显示原始响应（截断显示）
-                if "raw_response" in batch:
-                    raw_response = str(batch["raw_response"][i])[:150]
-                    print(f"  Raw Response: {raw_response}...")
+                correct = "✓" if pred_label == true_label else "✗"
+                print(f"[Step {step}] Pred:{'TRUE' if pred_label == 1 else 'FALSE'}, Actual:{'TRUE' if true_label == 1 else 'FALSE'}, Conf:{pred_prob[pred_label]:.3f} {correct}")
+        else:
+            # 详细版：完整信息（原版本简化）
+            print(f"\n=== Step {step} - Detailed Predictions ===")
+            batch_size = min(1, logits.size(0))  # 只显示1个样本
 
-                # 显示概率分布的分类倾向
-                favorable_prob = pred_values[0] + pred_values[1]  # Very + Somewhat favorable
-                unfavorable_prob = pred_values[2] + pred_values[3]  # Very + Somewhat unfavorable
-                neutral_prob = pred_values[4]  # DK/Refused
+            if "target_probs" in batch:
+                target_probs = batch["target_probs"]
+                for i in range(batch_size):
+                    pred_values = predicted_probs[i].detach().cpu().numpy()
+                    target_values = target_probs[i].detach().cpu().numpy()
 
-                target_favorable = target_values[0] + target_values[1]
-                target_unfavorable = target_values[2] + target_values[3]
-                target_neutral = target_values[4]
+                    print(f"Sample {i+1}:")
+                    print(f"  Predicted:  [{', '.join([f'{val:.3f}' for val in pred_values])}]")
+                    print(f"  Target:     [{', '.join([f'{val:.3f}' for val in target_values])}]")
 
-                print(f"  Predicted Sentiment: Favorable={favorable_prob:.3f}, Unfavorable={unfavorable_prob:.3f}, Neutral={neutral_prob:.3f}")
-                print(f"  Target Sentiment:    Favorable={target_favorable:.3f}, Unfavorable={target_unfavorable:.3f}, Neutral={target_neutral:.3f}")
+                    # JS散度
+                    pred_np = pred_values / pred_values.sum()
+                    target_np = target_values / target_values.sum()
+                    m = (pred_np + target_np) / 2
+                    epsilon = 1e-8
+                    kl_pm = np.sum(pred_np * np.log((pred_np + epsilon) / (m + epsilon)))
+                    kl_qm = np.sum(target_np * np.log((target_np + epsilon) / (m + epsilon)))
+                    js_div = 0.5 * (kl_pm + kl_qm)
+                    print(f"  JS Divergence: {js_div:.6f}, Similarity: {1-js_div:.6f}")
 
-        elif "labels" in batch:
-            # CulturalBench数据集 - 分类任务
-            labels = batch["labels"]
-            predictions = torch.argmax(logits, dim=-1)
-            batch_size = min(2, logits.size(0))  # 最多显示2个样本
+            elif "labels" in batch:
+                labels = batch["labels"]
+                predictions = torch.argmax(logits, dim=-1)
+                for i in range(batch_size):
+                    pred_prob = predicted_probs[i].detach().cpu().numpy()
+                    pred_label = predictions[i].item()
+                    true_label = labels[i].item()
 
-            print("CulturalBench Dataset - Binary Classification:")
+                    print(f"Sample {i+1}:")
+                    print(f"  Predicted: {'TRUE' if pred_label == 1 else 'FALSE'} (conf: {pred_prob[pred_label]:.3f})")
+                    print(f"  Actual:    {'TRUE' if true_label == 1 else 'FALSE'}")
+                    print(f"  Correct:   {'✓' if pred_label == true_label else '✗'}")
 
-            for i in range(batch_size):
-                print(f"\nSample {i+1}:")
-                if "prompt" in batch:
-                    prompt_text = batch["prompt"][i][:100] + "..." if len(batch["prompt"][i]) > 100 else batch["prompt"][i]
-                    print(f"  Question: {prompt_text}")
-                if "query" in batch:
-                    print(f"  Option: {batch['query'][i]}")
-
-                # 打印预测结果
-                pred_prob = predicted_probs[i].detach().cpu().numpy()
-                pred_label = predictions[i].item()
-                true_label = labels[i].item()
-
-                print(f"  Predicted: {'TRUE' if pred_label == 1 else 'FALSE'} (confidence: {pred_prob[pred_label]:.3f})")
-                print(f"  Actual:    {'TRUE' if true_label == 1 else 'FALSE'}")
-                print(f"  Correct:   {'✓' if pred_label == true_label else '✗'}")
-
-        print("=" * 50)
+            print("=" * 40)
 
     except Exception as e:
         logger.warning(f"Error printing predictions at step {step}: {e}")
-        # 不抛出异常，避免影响训练
 
 def train_epoch(model: CulturalAlignmentModel,
                 dataloader: DataLoader,
@@ -514,9 +495,10 @@ def train_epoch(model: CulturalAlignmentModel,
         total_diversity_loss += diversity_loss.item()
         num_batches += 1
 
-        # 打印预测结果（每5步打印一次，观察训练过程）
-        if step % 5 == 0 and (not distributed or dist.get_rank() == 0):
-            print_predictions(outputs, batch, step)
+        # 打印预测结果（每50步打印一次，减少输出）
+        # 如果需要完全关闭预测输出，可以注释掉这一行
+        if step % 50 == 0 and (not distributed or dist.get_rank() == 0):
+            print_predictions(outputs, batch, step, verbose=False)
 
         # 更新进度条
         if not distributed or dist.get_rank() == 0:

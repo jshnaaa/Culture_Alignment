@@ -154,22 +154,38 @@ class CulturalAlignmentModel(nn.Module):
             dropout=args.lora_dropout
         )
 
-        # 分类头
-        self.classifier = nn.Sequential(
-            nn.Linear(args.experts_output_dim, args.experts_output_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(args.lora_dropout),
-            nn.Linear(args.experts_output_dim // 2, args.num_classes)
-        )
-
-        # 损失函数
-        self.criterion = nn.CrossEntropyLoss()
-
         # 获取数据集配置
         self.dataset_config = args.get_dataset_config()
 
-        # 初始化分类头权重
-        self._init_classifier_weights()
+        # 根据数据集类型选择不同的输出头
+        if self.dataset_config["output_type"] == "classification":
+            # CulturalBench: 分类任务头
+            self.output_head = nn.Sequential(
+                nn.Linear(args.experts_output_dim, args.experts_output_dim // 2),
+                nn.ReLU(),
+                nn.Dropout(args.lora_dropout),
+                nn.Linear(args.experts_output_dim // 2, args.num_classes)
+            )
+            self.criterion = nn.CrossEntropyLoss()
+            logging.info("Initialized classification head for CulturalBench")
+
+        elif self.dataset_config["output_type"] == "probability_distribution":
+            # GlobalOpinions: 概率分布预测头
+            self.output_head = nn.Sequential(
+                nn.Linear(args.experts_output_dim, args.experts_output_dim // 2),
+                nn.ReLU(),
+                nn.Dropout(args.lora_dropout),
+                nn.Linear(args.experts_output_dim // 2, args.num_classes),
+                # 不需要显式的softmax，因为会在损失函数中处理
+            )
+            # 没有传统的损失函数，使用JS散度
+            logging.info("Initialized probability distribution prediction head for GlobalOpinions")
+
+        else:
+            raise ValueError(f"Unknown output type: {self.dataset_config['output_type']}")
+
+        # 初始化输出头权重
+        self._init_output_head_weights()
 
         logging.info(f"Cultural Alignment Model initialized")
         logging.info(f"Dataset type: {self.dataset_config['dataset_type']}")
@@ -183,13 +199,13 @@ class CulturalAlignmentModel(nn.Module):
         llama_dtype = next(self.llama_model.parameters()).dtype
         self.router = self.router.to(dtype=llama_dtype)
         self.expert_layer = self.expert_layer.to(dtype=llama_dtype)
-        self.classifier = self.classifier.to(dtype=llama_dtype)
+        self.output_head = self.output_head.to(dtype=llama_dtype)
         
         logging.info(f"所有组件使用dtype: {llama_dtype}")
 
-    def _init_classifier_weights(self):
-        """初始化分类头权重"""
-        for module in self.classifier:
+    def _init_output_head_weights(self):
+        """初始化输出头权重"""
+        for module in self.output_head:
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
@@ -340,9 +356,9 @@ class CulturalAlignmentModel(nn.Module):
         outputs["expert_output"] = expert_output # [batch_size, experts_hidden_size]，是所有专家输出的加权和
         outputs["expert_info"] = expert_info # 包含每个专家的单独输出和其他中间信息
 
-        # 4. 分类
-        logits = self.classifier(expert_output)  # [batch_size, num_classes]，MLP分类头将专家聚合特征映射到最终的类别空间
-        outputs["logits"] = logits # 每一行为各类别的未归一化分数
+        # 4. 输出预测（分类或概率分布）
+        logits = self.output_head(expert_output)  # [batch_size, num_classes]
+        outputs["logits"] = logits
 
         # 5. 计算损失
         if labels is not None or target_probs is not None or raw_responses is not None:
@@ -493,18 +509,18 @@ class CulturalAlignmentModel(nn.Module):
         # 专家层参数
         expert_params = sum(p.numel() for p in self.expert_layer.parameters() if p.requires_grad)
 
-        # 分类器参数
-        classifier_params = sum(p.numel() for p in self.classifier.parameters() if p.requires_grad)
+        # 输出头参数
+        output_head_params = sum(p.numel() for p in self.output_head.parameters() if p.requires_grad)
 
-        total_trainable = llama_trainable + router_params + expert_params + classifier_params
-        total_params = llama_total + router_params + expert_params + classifier_params
+        total_trainable = llama_trainable + router_params + expert_params + output_head_params
+        total_params = llama_total + router_params + expert_params + output_head_params
 
         return {
             "llama_trainable": llama_trainable,
             "llama_total": llama_total,
             "router_params": router_params,
             "expert_params": expert_params,
-            "classifier_params": classifier_params,
+            "output_head_params": output_head_params,
             "total_trainable": total_trainable,
             "total_params": total_params,
             "trainable_percentage": total_trainable / total_params * 100
