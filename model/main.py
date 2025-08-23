@@ -195,33 +195,61 @@ class CulturalAlignmentModel(nn.Module):
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
-    def js_divergence_loss(self, pred_probs: torch.Tensor, target_probs: torch.Tensor) -> torch.Tensor:
+    def js_divergence_loss(self, pred_logits: torch.Tensor, target_probs: torch.Tensor) -> torch.Tensor:
         """
-        计算JS散度损失
+        计算JS散度损失（更稳定的实现）
 
         Args:
-            pred_probs: 预测的概率分布 [batch_size, num_classes]
+            pred_logits: 预测的logits [batch_size, num_classes]
             target_probs: 目标概率分布 [batch_size, num_classes]
 
         Returns:
             js_loss: JS散度损失
         """
+        # 使用更大的epsilon防止数值不稳定
+        eps = 1e-6
+
         # 确保概率分布归一化
-        pred_probs = F.softmax(pred_probs, dim=-1)
-        target_probs = F.softmax(target_probs, dim=-1)
+        pred_probs = F.softmax(pred_logits, dim=-1)
+        target_probs = target_probs / (target_probs.sum(dim=-1, keepdim=True) + eps)
+
+        # 添加epsilon防止log(0)
+        pred_probs = pred_probs + eps
+        target_probs = target_probs + eps
+
+        # 重新归一化
+        pred_probs = pred_probs / pred_probs.sum(dim=-1, keepdim=True)
+        target_probs = target_probs / target_probs.sum(dim=-1, keepdim=True)
 
         # 计算中间分布M = (P + Q) / 2
         m = (pred_probs + target_probs) / 2
 
-        # 计算KL散度 KL(P||M) 和 KL(Q||M)
-        kl_pm = F.kl_div(torch.log(pred_probs + 1e-8), m, reduction='none').sum(dim=-1)
-        kl_qm = F.kl_div(torch.log(target_probs + 1e-8), m, reduction='none').sum(dim=-1)
+        # 使用更稳定的KL散度计算
+        # KL(P||M) = sum(P * log(P/M))
+        kl_pm = torch.sum(pred_probs * torch.log(pred_probs / m), dim=-1)
+        kl_qm = torch.sum(target_probs * torch.log(target_probs / m), dim=-1)
 
         # JS散度 = 0.5 * (KL(P||M) + KL(Q||M))
         js_divergence = 0.5 * (kl_pm + kl_qm)
 
+        # 限制JS散度的范围，防止异常值
+        js_divergence = torch.clamp(js_divergence, min=0.0, max=2.0)  # JS散度理论最大值是ln(2)≈0.693
+
+        # 检查是否有NaN或Inf
+        if torch.isnan(js_divergence).any() or torch.isinf(js_divergence).any():
+            logging.warning("NaN or Inf detected in JS divergence, using fallback MSE loss")
+            # 使用MSE作为后备损失
+            return F.mse_loss(pred_probs, target_probs)
+
         # 直接返回JS散度作为损失（越小表示分布越相似）
-        return js_divergence.mean()
+        js_loss = js_divergence.mean()
+
+        # 额外的安全检查
+        if torch.isnan(js_loss) or torch.isinf(js_loss):
+            logging.warning("JS loss is NaN/Inf, using MSE fallback")
+            return F.mse_loss(pred_probs, target_probs)
+
+        return js_loss
 
     def parse_global_opinions_target(self, target_data: List[str]) -> torch.Tensor:
         """

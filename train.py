@@ -19,9 +19,6 @@ from transformers import get_linear_schedule_with_warmup
 from model.args import ModelArgs
 from model.main import CulturalAlignmentModel
 
-import json
-import numpy as np
-
 # 设置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -230,14 +227,31 @@ class CulturalDataset(Dataset):
             country_probs = []
             for country, probs in response_dict.items():
                 if isinstance(probs, list) and len(probs) == 5:  # Global Opinions有5个类别
-                    country_probs.append(probs)
+                    # 验证概率值是否有效
+                    probs_array = np.array(probs, dtype=np.float32)
+                    if np.isnan(probs_array).any() or np.isinf(probs_array).any():
+                        logger.warning(f"Invalid probabilities found for {country}: {probs}")
+                        continue
+                    if probs_array.sum() <= 0:
+                        logger.warning(f"Zero or negative probability sum for {country}: {probs}")
+                        continue
+                    # 归一化概率
+                    probs_array = probs_array / probs_array.sum()
+                    country_probs.append(probs_array)
 
             if country_probs:
                 # 计算所有国家的平均概率
                 avg_probs = np.mean(country_probs, axis=0)
+                # 确保概率分布有效
+                if np.isnan(avg_probs).any() or np.isinf(avg_probs).any() or avg_probs.sum() <= 0:
+                    logger.warning("Invalid average probabilities, using uniform distribution")
+                    return torch.ones(5, dtype=torch.float32) / 5
+                # 重新归一化
+                avg_probs = avg_probs / avg_probs.sum()
                 return torch.tensor(avg_probs, dtype=torch.float32)
             else:
                 # 如果没有有效数据，返回均匀分布
+                logger.warning("No valid country probabilities found, using uniform distribution")
                 return torch.ones(5, dtype=torch.float32) / 5
 
         except Exception as e:
@@ -344,7 +358,9 @@ def train_epoch(model: CulturalAlignmentModel,
         if torch.isnan(outputs["loss"]).any():
             nan_detected = True
             if not distributed or dist.get_rank() == 0:
-                logger.warning(f"NaN detected in loss at step {step}, skipping update")
+                logger.warning(f"NaN detected in loss at step {step}, skipping batch")
+            # 跳过当前批次，但仍然递增num_batches以避免除零错误
+            num_batches += 1
             continue
 
         # 获取损失
@@ -357,23 +373,26 @@ def train_epoch(model: CulturalAlignmentModel,
         loss = loss / gradient_accumulation_steps
         loss.backward()
 
-        # 检查梯度是否有NaN
+        # 检查梯度是否有NaN或Inf
         has_nan_grad = False
-        for param in model.parameters():
-            if param.grad is not None and torch.isnan(param.grad).any():
-                has_nan_grad = True
-                break
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                if torch.isnan(param.grad).any() or torch.isinf(param.grad).any():
+                    has_nan_grad = True
+                    if not distributed or dist.get_rank() == 0:
+                        logger.warning(f"NaN/Inf detected in gradients for {name} at step {step}")
+                    break
         
         if has_nan_grad:
             if not distributed or dist.get_rank() == 0:
-                logger.warning(f"NaN detected in gradients at step {step}, skipping update")
+                logger.warning(f"Skipping parameter update due to NaN/Inf gradients at step {step}")
             optimizer.zero_grad()
             continue
 
         # 更新参数
         if (step + 1) % gradient_accumulation_steps == 0:
-            # 梯度裁剪
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            # 梯度裁剪（使用更小的阈值）
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
             optimizer.step()
             scheduler.step()
             optimizer.zero_grad()
@@ -681,9 +700,11 @@ def main():
         # 设置优化器
         optimizer = AdamW(
             model.parameters(),
-            lr=args.learning_rate,  # 降低学习率
+            lr=args.learning_rate,
             weight_decay=args.weight_decay,
-            eps=1e-8  # 添加小的epsilon值防止除零
+            eps=1e-8,  # 添加小的epsilon值防止除零
+            betas=(0.9, 0.999),  # 使用标准的beta值
+            amsgrad=False  # 不使用AMSGrad变体
         )
 
         # 计算总步数
