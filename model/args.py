@@ -46,6 +46,10 @@ class ModelArgs:
     eval_steps: int = 50
     logging_steps: int = 10
 
+    # 损失权重
+    load_balance_weight: float = 0.01
+    diversity_weight: float = 0.001
+
     # Output paths
     output_dir: str = "/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs"
     model_save_path: str = "/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama"

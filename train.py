@@ -19,6 +19,9 @@ from transformers import get_linear_schedule_with_warmup
 from model.args import ModelArgs
 from model.main import CulturalAlignmentModel
 
+import json
+import numpy as np
+
 # 设置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -203,20 +206,32 @@ class CulturalDataset(Dataset):
     def _parse_target_probabilities(self, response):
         """解析目标概率分布"""
         try:
-            # 处理字符串形式的响应
+            # 使用json安全解析
             if isinstance(response, str):
-                response_dict = eval(response)
+                # 提取字典部分（移除defaultdict包装）
+                dict_start = response.find('{')
+                dict_end = response.rfind('}') + 1
+                if dict_start >= 0 and dict_end > dict_start:
+                    dict_str = response[dict_start:dict_end]
+                    response_dict = json.loads(dict_str.replace("'", '"'))
+                else:
+                    raise ValueError("No dictionary found in response")
             else:
                 response_dict = response
 
-            # 提取第一个国家的概率分布
-            if isinstance(response_dict, dict):
-                for country, probs in response_dict.items():
-                    if isinstance(probs, list):
-                        return torch.tensor(probs, dtype=torch.float32)
+            # 合并所有国家的概率（取平均）
+            country_probs = []
+            for country, probs in response_dict.items():
+                if isinstance(probs, list) and len(probs) == 5:  # Global Opinions有5个类别
+                    country_probs.append(probs)
 
-            # 如果解析失败，返回均匀分布
-            return torch.ones(5, dtype=torch.float32) / 5  # 5个选项的均匀分布
+            if country_probs:
+                # 计算所有国家的平均概率
+                avg_probs = np.mean(country_probs, axis=0)
+                return torch.tensor(avg_probs, dtype=torch.float32)
+            else:
+                # 如果没有有效数据，返回均匀分布
+                return torch.ones(5, dtype=torch.float32) / 5
 
         except Exception as e:
             logger.warning(f"Failed to parse target probabilities: {e}")
@@ -480,42 +495,41 @@ def evaluate(model: CulturalAlignmentModel,
         # 将所有预测和标签收集到主进程
         all_predictions = np.array(all_predictions)
         all_labels = np.array(all_labels)
-        
+
         # 收集所有进程的预测和标签
         predictions_tensor = torch.tensor(all_predictions, device=device)
         labels_tensor = torch.tensor(all_labels, device=device)
-        
+
         # 收集所有进程的结果
         gathered_predictions = [torch.zeros_like(predictions_tensor) for _ in range(dist.get_world_size())]
         gathered_labels = [torch.zeros_like(labels_tensor) for _ in range(dist.get_world_size())]
-        
+
         dist.all_gather(gathered_predictions, predictions_tensor)
         dist.all_gather(gathered_labels, labels_tensor)
-        
-        # 收集损失
+
+        # 收集损失和批次数量
         losses = torch.tensor([total_loss, num_batches], dtype=torch.float32, device=device)
         dist.reduce(losses, dst=0, op=dist.ReduceOp.SUM)
-        
+
         if dist.get_rank() == 0:
             # 合并所有进程的结果
             all_predictions = torch.cat(gathered_predictions).cpu().numpy()
             all_labels = torch.cat(gathered_labels).cpu().numpy()
-            # TODO: 也需要收集概率分布数据用于GlobalOpinions评估
             total_loss, total_num_batches = losses.tolist()
-            
+
             # 根据数据集类型计算指标
             if dataset_config["dataset_type"] == "globalopinions":
-                # 对于Global Opinions，主要使用JS散度指标
-                # 注意：在分布式环境下，这里需要收集概率分布数据
-                # 暂时使用分类指标作为参考
+                # 对于Global Opinions，需要收集概率分布数据
+                # 注意：这里需要额外的代码来收集概率分布数据
+                # 由于代码复杂性，这里暂时使用分类指标作为参考
                 metrics = compute_metrics(all_predictions, all_labels)
                 metrics["note"] = "Using classification metrics as reference for GlobalOpinions in distributed mode"
             else:
                 # 对于CulturalBench，使用传统分类指标
                 metrics = compute_metrics(all_predictions, all_labels)
 
-            metrics["loss"] = total_loss / total_num_batches
-            
+            metrics["loss"] = total_loss / total_num_batches if total_num_batches > 0 else 0
+
             return metrics, all_predictions, all_labels
         else:
             return {}, [], []

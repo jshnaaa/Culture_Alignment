@@ -197,7 +197,7 @@ class CulturalAlignmentModel(nn.Module):
 
     def js_divergence_loss(self, pred_probs: torch.Tensor, target_probs: torch.Tensor) -> torch.Tensor:
         """
-        计算JS散度损失 (1 - JS散度)
+        计算JS散度损失
 
         Args:
             pred_probs: 预测的概率分布 [batch_size, num_classes]
@@ -220,14 +220,12 @@ class CulturalAlignmentModel(nn.Module):
         # JS散度 = 0.5 * (KL(P||M) + KL(Q||M))
         js_divergence = 0.5 * (kl_pm + kl_qm)
 
-        # 返回1 - JS散度作为损失（越相似损失越小）
-        js_loss = 1 - js_divergence
-
-        return js_loss.mean()
+        # 直接返回JS散度作为损失（越小表示分布越相似）
+        return js_divergence.mean()
 
     def parse_global_opinions_target(self, target_data: List[str]) -> torch.Tensor:
         """
-        解析global opinions数据集的目标数据
+        安全解析global opinions数据集的目标数据
 
         Args:
             target_data: 字符串形式的目标数据列表
@@ -240,15 +238,32 @@ class CulturalAlignmentModel(nn.Module):
 
         for i, target_str in enumerate(target_data):
             try:
-                # 解析字符串格式的数据
-                target_dict = eval(target_str) if isinstance(target_str, str) else target_str
+                # 使用json安全解析
+                if isinstance(target_str, str):
+                    # 提取字典部分（移除defaultdict包装）
+                    dict_start = target_str.find('{')
+                    dict_end = target_str.rfind('}') + 1
+                    if dict_start >= 0 and dict_end > dict_start:
+                        dict_str = target_str[dict_start:dict_end]
+                        target_dict = json.loads(dict_str.replace("'", '"'))
+                    else:
+                        raise ValueError("No dictionary found in target string")
+                else:
+                    target_dict = target_str
 
-                # 提取概率分布（假设只取第一个国家的数据）
-                if isinstance(target_dict, dict):
-                    for country, probs in target_dict.items():
-                        if isinstance(probs, list) and len(probs) == self.args.num_classes:
-                            target_probs[i] = torch.tensor(probs, dtype=torch.float32, device=self.args.device)
-                            break
+                # 合并所有国家的概率（取平均）
+                country_probs = []
+                for country, probs in target_dict.items():
+                    if isinstance(probs, list) and len(probs) == self.args.num_classes:
+                        country_probs.append(probs)
+
+                if country_probs:
+                    # 计算所有国家的平均概率
+                    avg_probs = np.mean(country_probs, axis=0)
+                    target_probs[i] = torch.tensor(avg_probs, dtype=torch.float32, device=self.args.device)
+                else:
+                    # 如果没有有效数据，使用均匀分布
+                    target_probs[i] = torch.ones(self.args.num_classes, device=self.args.device) / self.args.num_classes
 
             except Exception as e:
                 logging.warning(f"Failed to parse target data at index {i}: {e}")
@@ -337,8 +352,8 @@ class CulturalAlignmentModel(nn.Module):
 
             # 总损失，三者加权和，权重分别为 1, 0.01, 0.001。
             total_loss = (classification_loss +
-                         0.01 * load_balancing_loss +
-                         0.001 * diversity_loss)
+                          self.args.load_balance_weight * load_balancing_loss +
+                          self.args.diversity_weight * diversity_loss)
             outputs["loss"] = total_loss
 
         return outputs # 字典类型，包含所有中间特征、专家权重、分类logits、各项损失等
