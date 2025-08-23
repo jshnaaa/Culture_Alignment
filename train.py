@@ -29,6 +29,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+torch.cuda.empty_cache()
+torch.backends.cudnn.benchmark = True
+
+# 设置环境变量以减少内存碎片
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
 def compute_js_divergence_metrics(pred_probs: np.ndarray, target_probs: np.ndarray) -> dict:
     """
     计算JS散度相关的评估指标
@@ -308,6 +315,7 @@ def train_epoch(model: CulturalAlignmentModel,
     total_load_balancing_loss = 0
     total_diversity_loss = 0
     num_batches = 0
+    nan_detected = False
 
     # 只在主进程中显示进度条
     if not distributed or dist.get_rank() == 0:
@@ -332,6 +340,13 @@ def train_epoch(model: CulturalAlignmentModel,
         else:
             raise ValueError("Unknown batch format")
 
+        # 检查输出是否有NaN
+        if torch.isnan(outputs["loss"]).any():
+            nan_detected = True
+            if not distributed or dist.get_rank() == 0:
+                logger.warning(f"NaN detected in loss at step {step}, skipping update")
+            continue
+
         # 获取损失
         loss = outputs["loss"]
         classification_loss = outputs["classification_loss"]
@@ -342,8 +357,22 @@ def train_epoch(model: CulturalAlignmentModel,
         loss = loss / gradient_accumulation_steps
         loss.backward()
 
+        # 检查梯度是否有NaN
+        has_nan_grad = False
+        for param in model.parameters():
+            if param.grad is not None and torch.isnan(param.grad).any():
+                has_nan_grad = True
+                break
+        
+        if has_nan_grad:
+            if not distributed or dist.get_rank() == 0:
+                logger.warning(f"NaN detected in gradients at step {step}, skipping update")
+            optimizer.zero_grad()
+            continue
+
         # 更新参数
         if (step + 1) % gradient_accumulation_steps == 0:
+            # 梯度裁剪
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             scheduler.step()
@@ -362,6 +391,11 @@ def train_epoch(model: CulturalAlignmentModel,
                 'loss': f'{loss.item() * gradient_accumulation_steps:.4f}',
                 'lr': f'{scheduler.get_last_lr()[0]:.2e}'
             })
+
+    # 如果检测到NaN，记录警告
+    if nan_detected and (not distributed or dist.get_rank() == 0):
+        logger.warning("NaN values detected during training. Consider reducing learning rate or using gradient clipping.")
+
 
     # 在分布式环境中，计算所有进程的平均损失
     if distributed:
@@ -432,7 +466,11 @@ def evaluate(model: CulturalAlignmentModel,
     num_batches = 0
 
     # 获取数据集配置
-    dataset_config = model.dataset_config
+    # dataset_config = model.dataset_config
+    if distributed:
+        dataset_config = model.module.dataset_config  # 通过.module访问原始模型
+    else:
+        dataset_config = model.dataset_config
 
     with torch.no_grad():
         # 只在主进程中显示进度条
@@ -603,7 +641,7 @@ def main():
                 model,
                 device_ids=[args.local_rank],
                 output_device=args.local_rank,
-                find_unused_parameters=True
+                find_unused_parameters=False  # 设置为False以减少内存使用
             )
 
         # 创建数据集
@@ -643,8 +681,9 @@ def main():
         # 设置优化器
         optimizer = AdamW(
             model.parameters(),
-            lr=args.learning_rate,
-            weight_decay=args.weight_decay
+            lr=args.learning_rate,  # 降低学习率
+            weight_decay=args.weight_decay,
+            eps=1e-8  # 添加小的epsilon值防止除零
         )
 
         # 计算总步数
