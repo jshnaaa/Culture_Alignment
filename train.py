@@ -312,7 +312,7 @@ def plot_confusion_matrix(labels: np.ndarray, predictions: np.ndarray, save_path
     plt.ylabel('True Label')
     plt.xlabel('Predicted Label')
     plt.tight_layout()
-        plt.savefig(save_path)
+    plt.savefig(save_path)
     plt.close()
 
 def print_predictions(outputs: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor], step: int, verbose: bool = True):

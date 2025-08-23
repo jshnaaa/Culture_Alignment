@@ -1,23 +1,18 @@
+import json
 import logging
 import os
 from typing import Dict, List, Optional
-import json
-from collections import defaultdict
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model, TaskType
+from transformers import AutoConfig
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
 from .args import ModelArgs
 from .experts import ExpertLayer
-from .router import ExpertRouter, AdaptiveRouter
-
-from torch.nn.parallel import DistributedDataParallel as DDP
-from transformers import AutoConfig
-
-import torch.distributed as dist
+from .router import ExpertRouter
 
 
 class CulturalAlignmentModel(nn.Module):
@@ -404,30 +399,63 @@ class CulturalAlignmentModel(nn.Module):
 
     def predict(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
-        预测函数（推理阶段）
+        预测函数（推理阶段）- 根据数据集类型返回不同形式的预测结果
 
         Args:
             input_ids: 输入token IDs
             attention_mask: 注意力掩码
 
         Returns:
-            predictions: 预测结果字典
+            predictions: 预测结果字典（根据任务类型不同）
         """
-        self.eval() # 切换模型到评估模式（evaluation mode），关闭 Dropout、BatchNorm 等训练时特有的行为
-        with torch.no_grad(): # 不计算梯度（在预测时不需要反向传播，也不需要计算梯度）
-            outputs = self.forward(input_ids, attention_mask) # 用 forward 方法进行一次完整的推理流程，得到包含 logits、专家权重等信息的输出字典
+        self.eval()
+        with torch.no_grad():
+            outputs = self.forward(input_ids, attention_mask)
 
-            # 获取预测
-            logits = outputs["logits"] # [batch_size, num_classes]，分类头输出的未归一化分数
-            probabilities = F.softmax(logits, dim=-1) # 对 logits 进行 softmax，得到每个样本属于各类别的概率分布
-            predictions = torch.argmax(logits, dim=-1) # 在每个样本的 logits 上取最大值对应的索引，即为模型预测的类别
+            # 获取logits和概率分布
+            logits = outputs["logits"]  # [batch_size, num_classes]
+            probabilities = F.softmax(logits, dim=-1)  # [batch_size, num_classes]
 
-            return {
-                "predictions": predictions,
-                "probabilities": probabilities,
-                "logits": logits,
-                "expert_weights": outputs["expert_weights"]
-            } # 字典类型，包括类别标签、概率分布、原始分数及专家分配信息
+            # 根据数据集类型返回不同形式的预测结果
+            if self.dataset_config["output_type"] == "classification":
+                # CulturalBench：分类任务
+                predictions = torch.argmax(logits, dim=-1)  # [batch_size] - 类别索引
+
+                return {
+                    "task_type": "classification",
+                    "predictions": predictions,  # 类别标签 (0=FALSE, 1=TRUE)
+                    "probabilities": probabilities,  # 每个类别的概率
+                    "logits": logits,
+                    "expert_weights": outputs["expert_weights"],
+                    "predicted_labels": ["FALSE" if p == 0 else "TRUE" for p in predictions.cpu().numpy()]
+                }
+
+            elif self.dataset_config["output_type"] == "probability_distribution":
+                # GlobalOpinions：概率分布预测任务
+                # 主要预测结果就是概率分布本身，不需要argmax
+                most_likely_class = torch.argmax(probabilities, dim=-1)  # 仅作为参考
+
+                return {
+                    "task_type": "probability_distribution",
+                    "predicted_probabilities": probabilities,  # 主要结果：完整的概率分布
+                    "logits": logits,
+                    "expert_weights": outputs["expert_weights"],
+                    # 以下仅作为参考信息
+                    "most_likely_class": most_likely_class,  # 最高概率的类别（仅供参考）
+                    "class_names": ['Very favorable', 'Somewhat favorable', 'Somewhat unfavorable', 'Very unfavorable', 'DK/Refused'],
+                    "predicted_distribution": [
+                        {
+                            "class": name,
+                            "probability": float(prob)
+                        } for name, prob in zip(
+                            ['Very favorable', 'Somewhat favorable', 'Somewhat unfavorable', 'Very unfavorable', 'DK/Refused'],
+                            probabilities[0].cpu().numpy()  # 假设batch_size=1
+                        )
+                    ] if probabilities.size(0) == 1 else None
+                }
+
+            else:
+                raise ValueError(f"Unknown output type: {self.dataset_config['output_type']}")
 
     def encode_and_predict(self, texts: List[str]) -> Dict[str, torch.Tensor]:
         """
