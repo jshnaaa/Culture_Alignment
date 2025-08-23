@@ -1,0 +1,185 @@
+Starting Cultural Alignment Model Training
+Arguments: ModelArgs(llama_model_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct', num_experts=6, experts_hidden_size=512, experts_output_dim=256, router_hidden_size=512, num_classes=2, lora_r=8, lora_alpha=32, lora_dropout=0.1, target_modules=['all'], learning_rate=5e-05, num_epochs=1, batch_size=16, gradient_accumulation_steps=4, warmup_steps=100, weight_decay=0.01, max_grad_norm=1.0, max_length=512, train_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_train.json', test_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_test.json', device=device(type='cuda', index=0), seed=42, save_steps=100, eval_steps=50, logging_steps=10, output_dir='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs', model_save_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama', log_file='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama_training.log')
+Initializing model...
+Trainable parameters: {'llama_trainable': 3407872, 'llama_total': 8033669120, 'router_params': 2230534, 'expert_params': 13791744, 'classifier_params': 33154, 'total_trainable': 19463304, 'total_params': 8049724552, 'trainable_percentage': 0.2417884472228833}
+Loading datasets...
+Loaded 9 samples from /root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_train.json
+Loaded 491 samples from /root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_test.json
+Starting training...
+Epoch 1/1
+Starting Cultural Alignment Model Training
+Arguments: ModelArgs(llama_model_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct', num_experts=6, experts_hidden_size=512, experts_output_dim=256, router_hidden_size=512, num_classes=2, lora_r=8, lora_alpha=32, lora_dropout=0.1, target_modules=['all'], learning_rate=5e-05, num_epochs=1, batch_size=16, gradient_accumulation_steps=4, warmup_steps=100, weight_decay=0.01, max_grad_norm=1.0, max_length=512, train_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_train.json', test_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_test.json', device=device(type='cuda', index=0), seed=42, save_steps=100, eval_steps=50, logging_steps=10, output_dir='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs', model_save_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama', log_file='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama_training.log')
+Initializing model...
+Trainable parameters: {'llama_trainable': 3407872, 'llama_total': 8033669120, 'router_params': 2230534, 'expert_params': 13791744, 'classifier_params': 33154, 'total_trainable': 19463304, 'total_params': 8049724552, 'trainable_percentage': 0.2417884472228833}
+Loading datasets...
+Loaded 9 samples from /root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_train.json
+Loaded 491 samples from /root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_test.json
+Starting training...
+Epoch 1/1
+Total number of batches is zero!
+Train metrics: {}
+Starting Cultural Alignment Model Training
+Arguments: ModelArgs(llama_model_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct', num_experts=6, experts_hidden_size=512, experts_output_dim=256, router_hidden_size=512, num_classes=2, lora_r=8, lora_alpha=32, lora_dropout=0.1, target_modules=['all'], learning_rate=5e-05, num_epochs=1, batch_size=16, gradient_accumulation_steps=4, warmup_steps=100, weight_decay=0.01, max_grad_norm=1.0, max_length=512, train_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_train.json', test_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_test.json', device=device(type='cuda', index=0), seed=42, save_steps=100, eval_steps=50, logging_steps=10, output_dir='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs', model_save_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama', log_file='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama_training.log')
+Initializing model...
+Loading datasets...
+Starting Cultural Alignment Model Training
+Arguments: ModelArgs(llama_model_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct', num_experts=6, experts_hidden_size=512, experts_output_dim=256, router_hidden_size=512, num_classes=2, lora_r=8, lora_alpha=32, lora_dropout=0.1, target_modules=['all'], learning_rate=5e-05, num_epochs=1, batch_size=16, gradient_accumulation_steps=4, warmup_steps=100, weight_decay=0.01, max_grad_norm=1.0, max_length=512, train_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_train.json', test_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_test.json', device=device(type='cuda', index=0), seed=42, save_steps=100, eval_steps=50, logging_steps=10, output_dir='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs', model_save_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama', log_file='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama_training.log')
+Initializing model...
+Starting Cultural Alignment Model Training
+Arguments: ModelArgs(llama_model_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct', num_experts=6, experts_hidden_size=512, experts_output_dim=256, router_hidden_size=512, num_classes=2, lora_r=8, lora_alpha=32, lora_dropout=0.1, target_modules=['all'], learning_rate=5e-05, num_epochs=1, batch_size=16, gradient_accumulation_steps=4, warmup_steps=100, weight_decay=0.01, max_grad_norm=1.0, max_length=512, train_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_train.json', test_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_test.json', device=device(type='cuda', index=0), seed=42, save_steps=100, eval_steps=50, logging_steps=10, output_dir='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs', model_save_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama', log_file='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama_training.log')
+Initializing model...
+Loading datasets...
+Loaded 9 samples from /root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_train.json
+Loaded 491 samples from /root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_test.json
+Starting training...
+Epoch 1/1
+Total number of batches is zero!
+Epoch 1/1 - Training loss: 0.0000
+Training failed with error: 'ExpertLayer' object has no attribute 'num_experts'
+Starting Cultural Alignment Model Training
+Arguments: ModelArgs(llama_model_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct', num_experts=6, experts_hidden_size=512, experts_output_dim=256, router_hidden_size=512, num_classes=2, lora_r=8, lora_alpha=32, lora_dropout=0.1, target_modules=['all'], learning_rate=5e-05, num_epochs=1, batch_size=16, gradient_accumulation_steps=4, warmup_steps=100, weight_decay=0.01, max_grad_norm=1.0, max_length=512, train_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_train.json', test_data_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_test.json', device=device(type='cuda', index=0), seed=42, save_steps=100, eval_steps=50, logging_steps=10, output_dir='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs', model_save_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama', log_file='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama_training.log')
+Initializing model...
+Loading datasets...
+Loaded 9 samples from /root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_train.json
+Loaded 491 samples from /root/autodl-tmp/CultureMoE/Culture_Alignment/data/CulturalBench-Hard_test.json
+Starting training...
+Epoch 1/1
+Total number of batches is zero!
+Epoch 1/1 - Training loss: 0.0000
+Epoch 1/1 - Evaluation accuracy: 0.3271
+Starting Cultural Alignment Model Training
+Arguments: ModelArgs(llama_model_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct', num_experts=6, experts_hidden_size=512, experts_output_dim=256, router_hidden_size=512, num_classes=2, lora_r=8, lora_alpha=32, lora_dropout=0.1, target_modules=['all'], learning_rate=5e-05, num_epochs=1, batch_size=16, gradient_accumulation_steps=4, warmup_steps=100, weight_decay=0.01, max_grad_norm=1.0, max_length=512, train_data_path='/root/autodl-fs/CulturalBench-Hard_train.json', test_data_path='/root/autodl-fs/CulturalBench-Hard_test.json', device=device(type='cuda', index=0), seed=42, save_steps=100, eval_steps=50, logging_steps=10, output_dir='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs', model_save_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama', log_file='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama_training.log')
+Initializing model...
+Loading datasets...
+Loaded 4417 samples from /root/autodl-fs/CulturalBench-Hard_train.json
+Loaded 491 samples from /root/autodl-fs/CulturalBench-Hard_test.json
+Starting training...
+Epoch 1/1
+Training failed with error: CUDA out of memory. Tried to allocate 224.00 MiB. GPU 
+Starting Cultural Alignment Model Training
+Arguments: ModelArgs(llama_model_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct', num_experts=6, experts_hidden_size=512, experts_output_dim=256, router_hidden_size=512, num_classes=2, lora_r=8, lora_alpha=32, lora_dropout=0.1, target_modules=['all'], learning_rate=5e-05, num_epochs=1, batch_size=8, gradient_accumulation_steps=4, warmup_steps=100, weight_decay=0.01, max_grad_norm=1.0, max_length=512, train_data_path='/root/autodl-fs/CulturalBench-Hard_train.json', test_data_path='/root/autodl-fs/CulturalBench-Hard_test.json', device=device(type='cuda', index=0), seed=42, save_steps=100, eval_steps=50, logging_steps=10, output_dir='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs', model_save_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama', log_file='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama_training.log')
+Initializing model...
+Loading datasets...
+Loaded 4417 samples from /root/autodl-fs/CulturalBench-Hard_train.json
+Loaded 491 samples from /root/autodl-fs/CulturalBench-Hard_test.json
+Starting training...
+Epoch 1/1
+Training failed with error: CUDA out of memory. Tried to allocate 112.00 MiB. GPU 
+Starting Cultural Alignment Model Training
+Arguments: ModelArgs(llama_model_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct', num_experts=6, experts_hidden_size=512, experts_output_dim=256, router_hidden_size=512, num_classes=2, lora_r=8, lora_alpha=32, lora_dropout=0.1, target_modules=['all'], learning_rate=5e-05, num_epochs=1, batch_size=8, gradient_accumulation_steps=4, warmup_steps=100, weight_decay=0.01, max_grad_norm=1.0, max_length=512, train_data_path='/root/autodl-fs/CulturalBench-Hard_train.json', test_data_path='/root/autodl-fs/CulturalBench-Hard_test.json', device=device(type='cuda', index=0), seed=42, save_steps=100, eval_steps=50, logging_steps=10, output_dir='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs', model_save_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama', log_file='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama_training.log')
+Initializing model...
+Loading datasets...
+Loaded 4417 samples from /root/autodl-fs/CulturalBench-Hard_train.json
+Loaded 491 samples from /root/autodl-fs/CulturalBench-Hard_test.json
+Starting training...
+Epoch 1/1
+Training failed with error: CUDA out of memory. Tried to allocate 112.00 MiB. GPU 
+Starting Cultural Alignment Model Training
+Arguments: ModelArgs(llama_model_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct', num_experts=6, experts_hidden_size=512, experts_output_dim=256, router_hidden_size=512, num_classes=2, lora_r=8, lora_alpha=32, lora_dropout=0.1, target_modules=['all'], learning_rate=5e-05, num_epochs=1, batch_size=8, gradient_accumulation_steps=4, warmup_steps=100, weight_decay=0.01, max_grad_norm=1.0, max_length=512, train_data_path='/root/autodl-fs/CulturalBench-Hard_train.json', test_data_path='/root/autodl-fs/CulturalBench-Hard_test.json', device=device(type='cuda', index=0), seed=42, save_steps=100, eval_steps=50, logging_steps=10, output_dir='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs', model_save_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama', log_file='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama_training.log')
+Initializing model...
+Loading datasets...
+Loaded 4417 samples from /root/autodl-fs/CulturalBench-Hard_train.json
+Loaded 491 samples from /root/autodl-fs/CulturalBench-Hard_test.json
+Starting training...
+Epoch 1/1
+Training failed with error: CUDA out of memory. Tried to allocate 112.00 MiB. GPU 
+Traceback (most recent call last):
+  File "/root/autodl-tmp/CultureMoE/Culture_Alignment/train.py", line 694, in main
+    train_metrics = train_epoch(
+                    ^^^^^^^^^^^^
+  File "/root/autodl-tmp/CultureMoE/Culture_Alignment/train.py", line 190, in train_epoch
+    outputs = model(input_ids, attention_mask, labels)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/parallel/distributed.py", line 1593, in forward
+    else self._run_ddp_forward(*inputs, **kwargs)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/parallel/distributed.py", line 1411, in _run_ddp_forward
+    return self.module(*inputs, **kwargs)  # type: ignore[index]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/CultureMoE/Culture_Alignment/model/main.py", line 209, in forward
+    llama_outputs = self.llama_model(
+                    ^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/peft/peft_model.py", line 1850, in forward
+    return self.base_model(
+           ^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/peft/tuners/tuners_utils.py", line 222, in forward
+    return self.model.forward(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/transformers/utils/generic.py", line 959, in wrapper
+    output = func(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/transformers/models/llama/modeling_llama.py", line 460, in forward
+    outputs: BaseModelOutputWithPast = self.model(
+                                       ^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/transformers/utils/generic.py", line 1083, in wrapper
+    outputs = func(self, *args, **kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/transformers/models/llama/modeling_llama.py", line 390, in forward
+    hidden_states = decoder_layer(
+                    ^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/transformers/modeling_layers.py", line 93, in __call__
+    return super().__call__(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/transformers/utils/generic.py", line 1043, in wrapped_forward
+    output = orig_forward(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/transformers/models/llama/modeling_llama.py", line 304, in forward
+    hidden_states = self.mlp(hidden_states)
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/transformers/models/llama/modeling_llama.py", line 152, in forward
+    down_proj = self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 112.00 MiB. GPU 
+
+Starting Cultural Alignment Model Training
+Arguments: ModelArgs(llama_model_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct', num_experts=6, experts_hidden_size=512, experts_output_dim=256, router_hidden_size=512, num_classes=2, lora_r=8, lora_alpha=32, lora_dropout=0.1, target_modules=['all'], learning_rate=0.0005, num_epochs=1, batch_size=2, gradient_accumulation_steps=2, warmup_steps=100, weight_decay=0.01, max_grad_norm=1.0, max_length=512, train_data_path='/root/autodl-fs/CulturalBench-Hard_train.json', test_data_path='/root/autodl-fs/CulturalBench-Hard_test.json', device=device(type='cuda', index=0), seed=42, save_steps=100, eval_steps=50, logging_steps=10, output_dir='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs', model_save_path='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama', log_file='/root/autodl-tmp/CultureMoE/Culture_Alignment/outputs/CA_llama_training.log')
+Initializing model...
+Loading datasets...
+Loaded 4417 samples from /root/autodl-fs/CulturalBench-Hard_train.json
+Loaded 491 samples from /root/autodl-fs/CulturalBench-Hard_test.json
+Starting training...
+Epoch 1/1
+Epoch 1/1 - Training loss: nan
+Epoch 1/1 - Evaluation accuracy: 0.7398

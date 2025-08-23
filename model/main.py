@@ -6,77 +6,109 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model, TaskType
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
 from .args import ModelArgs
 from .experts import ExpertLayer
 from .router import ExpertRouter, AdaptiveRouter
 
+from torch.nn.parallel import DistributedDataParallel as DDP
 from transformers import AutoConfig
 
+import torch.distributed as dist
 
 
 class CulturalAlignmentModel(nn.Module):
     """
-    文化对齐模型
-    结合了Llama3.1共享层、路由算法和专家层的完整架构
+    文化对齐模型: Llama3.1共享层、路由算法和专家层
     """
 
     def __init__(self, args: ModelArgs):
         super().__init__()
         self.args = args
+        
+        # 获取模型路径
+        if isinstance(args.llama_model_path, str):
+            self.model_path = args.llama_model_path
+        else:
+            self.model_path = getattr(args.llama_model_path, 'llama_model_path', None)
+            if self.model_path is None:
+                raise ValueError("Provided object does not have 'llama_model_path' attribute")
 
-        # 加载本地Llama3.1模型（内存优化版）
+        # 检查是否在分布式环境中
+        self.is_distributed = hasattr(args, 'distributed') and args.distributed
+        
+        # 加载本地Llama3.1模型
         logging.info(f"Loading Llama model from {args.llama_model_path}")
-        # 自动加载与 Llama3.1 模型配套的分词器（tokenizer）
-        # tokenizer 将文本（字符串）转换为模型可以处理的 token ID（整数序列），并生成 attention mask 等输入信息。
+
+        # 自动加载与 Llama3.1 模型配套的分词器
         self.tokenizer = AutoTokenizer.from_pretrained(args.llama_model_path)
+
         # 加载模型配置
         config = AutoConfig.from_pretrained(args.llama_model_path)
 
-        # 修改 rope_scaling 配置
-        # config.rope_scaling = {
-        #     "type": "llama",  # 或者 "llama3"，根据需要设置
-        #     "factor": 8.0
-        # }
+        # 根据是否分布式训练选择不同的加载方式
+        if self.is_distributed:
+            # 分布式训练模式 - 不使用 device_map 和量化
+            logging.info("Using distributed training mode - disabling device_map and quantization")
+            
+            # 设置加载参数
+            load_kwargs = {
+                "config": config,
+                "torch_dtype": torch.float16,  # 使用float16节省显存
+                "trust_remote_code": True,
+                "low_cpu_mem_usage": True,
+                "device_map": None,  # 禁用自动设备映射
+            }
+            
+            try:
+                self.llama_model = AutoModelForCausalLM.from_pretrained(
+                    self.model_path,
+                    **load_kwargs
+                )
+                # 将模型移动到当前设备
+                self.llama_model = self.llama_model.to(args.device)
+                logging.info("Successfully loaded model for distributed training")
+            except Exception as e:
+                logging.error(f"Failed to load model for distributed training: {e}")
+                raise
+        else:
+            # 单机训练模式 - 可以使用量化和设备映射
+            logging.info("Using single-GPU training mode - enabling quantization if available")
+            
+            try:
+                # 首先尝试8位量化（如果可用）
+                quantization_config = BitsAndBytesConfig(
+                    load_in_8bit=True,
+                    llm_int8_threshold=6.0,
+                    llm_int8_has_fp16_weight=False,
+                )
+                
+                self.llama_model = AutoModelForCausalLM.from_pretrained(
+                    self.model_path,
+                    config=config,
+                    torch_dtype=torch.float16,
+                    device_map=None,
+                    trust_remote_code=True,
+                    low_cpu_mem_usage=True,
+                    quantization_config=quantization_config,
+                    offload_folder="./offload"
+                )
+                logging.info("Successfully loaded with 8-bit quantization")
+            except Exception as e:
+                logging.warning(f"8-bit quantization failed: {e}, trying alternative loading...")
+                # 如果8位量化失败，使用float16精度加载
+                self.llama_model = AutoModelForCausalLM.from_pretrained(
+                    self.model_path,
+                    config=config,
+                    torch_dtype=torch.float16,
+                    device_map=None,
+                    trust_remote_code=True,
+                    low_cpu_mem_usage=True,
+                )
+                logging.info("Successfully loaded with float16 precision")
 
-        # 优先尝试以8位量化（节省内存）方式加载Llama3.1模型，若失败则自动回退到float32精度加载
-        # try:
-        #     # 首先尝试8位量化（如果可用）
-        #     self.llama_model = AutoModelForCausalLM.from_pretrained(
-        #         args.llama_model_path,
-        #         config=config,
-        #         torch_dtype=torch.float16,
-        #         device_map="auto",
-        #         trust_remote_code=True,
-        #         low_cpu_mem_usage=True,
-        #         load_in_8bit=True,  # 保留 8 位量化
-        #         offload_folder="./offload"  # 添加 offload 文件夹
-        #     )
-        #     logging.info("Successfully loaded with 8-bit quantization")
-        # except Exception as e:
-        #     logging.warning(f"8-bit quantization failed: {e}, trying alternative loading...")
-        #     # 如果8位量化失败，使用CPU + float32
-        #     self.llama_model = AutoModelForCausalLM.from_pretrained(
-        #         args.llama_model_path,
-        #         config=config,
-        #         torch_dtype=torch.float32,  # 使用float32可能更稳定
-        #         # device_map="auto",
-        #         trust_remote_code=True,
-        #         low_cpu_mem_usage=True,
-        #     )
-        #     logging.info("Successfully loaded with CPU + float32")
-        self.llama_model = AutoModelForCausalLM.from_pretrained(
-            args.llama_model_path,
-            config=config,
-            torch_dtype=torch.float32,  # 使用float32可能更稳定
-            # device_map="auto",
-            trust_remote_code=True,
-            low_cpu_mem_usage=True,
-        )
-        logging.info("Successfully loaded with CPU + float32")
-
-        # 设置padding token，确保tokenizer有一个有效的 padding token，以便对输入文本进行批量处理时能够正确填充（padding）
+        # 设置padding token
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -87,43 +119,45 @@ class CulturalAlignmentModel(nn.Module):
             r=args.lora_r,
             lora_alpha=args.lora_alpha,
             lora_dropout=args.lora_dropout,
-            target_modules=args.target_modules  # ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+            target_modules=args.target_modules if args.target_modules != ["all"] else None
         )
 
         # 将Llama模型转换为LoRA模型
         self.llama_model = get_peft_model(self.llama_model, llama_lora_config)
+        
+        # 在分布式模式下，确保模型在当前设备上
+        if self.is_distributed:
+            self.llama_model = self.llama_model.to(args.device)
 
         logging.info(f"Applied LoRA to Llama model with r={args.lora_r}, alpha={args.lora_alpha}")
         self.llama_model.print_trainable_parameters()
 
         # 获取Llama的隐藏层大小
-        llama_hidden_size = self.llama_model.config.hidden_size  # 4096
+        llama_hidden_size = self.llama_model.config.hidden_size
 
         # 初始化路由器
-        self.router = ExpertRouter( # 也可以调用 AdaptiveRouter
-            input_dim=llama_hidden_size,
+        self.router = ExpertRouter(
+            router_input_dim=llama_hidden_size,
             num_experts=args.num_experts,
-            hidden_dim=args.router_hidden_size,
+            router_hidden_dim=args.router_hidden_size,
             dropout=args.lora_dropout
         )
 
-        # 初始化专家层
         self.expert_layer = ExpertLayer(
-            input_dim=llama_hidden_size,
-            expert_hidden_dim=args.expert_hidden_size,
-            output_dim=args.expert_hidden_size,  # 专家输出维度
+            experts_input_dim=llama_hidden_size,
+            experts_hidden_dim=args.experts_hidden_size,
+            experts_output_dim=args.experts_output_dim,
             num_experts=args.num_experts,
-            dropout=args.lora_dropout,
             lora_rank=args.lora_r,
-            lora_alpha=args.lora_alpha
+            dropout=args.lora_dropout
         )
 
         # 分类头
         self.classifier = nn.Sequential(
-            nn.Linear(args.expert_hidden_size, args.expert_hidden_size // 2),
+            nn.Linear(args.experts_output_dim, args.experts_output_dim // 2),
             nn.ReLU(),
             nn.Dropout(args.lora_dropout),
-            nn.Linear(args.expert_hidden_size // 2, args.num_classes)
+            nn.Linear(args.experts_output_dim // 2, args.num_classes)
         )
 
         # 损失函数
@@ -135,7 +169,15 @@ class CulturalAlignmentModel(nn.Module):
         logging.info(f"Cultural Alignment Model initialized")
         logging.info(f"Llama hidden size: {llama_hidden_size}")
         logging.info(f"Number of experts: {args.num_experts}")
-        logging.info(f"Expert hidden size: {args.expert_hidden_size}")
+        logging.info(f"Expert hidden size: {args.experts_hidden_size}")
+
+        # 确保所有组件使用相同的dtype
+        llama_dtype = next(self.llama_model.parameters()).dtype
+        self.router = self.router.to(dtype=llama_dtype)
+        self.expert_layer = self.expert_layer.to(dtype=llama_dtype)
+        self.classifier = self.classifier.to(dtype=llama_dtype)
+        
+        logging.info(f"所有组件使用dtype: {llama_dtype}")
 
     def _init_classifier_weights(self):
         """初始化分类头权重"""
@@ -144,6 +186,7 @@ class CulturalAlignmentModel(nn.Module):
                 nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
+
 
     def forward(self,
                 input_ids: torch.Tensor,
@@ -179,7 +222,7 @@ class CulturalAlignmentModel(nn.Module):
 
         # 3. 专家层处理
         expert_output, expert_info = self.expert_layer(llama_features, expert_weights)
-        outputs["expert_output"] = expert_output # [batch_size, expert_hidden_size]，是所有专家输出的加权和
+        outputs["expert_output"] = expert_output # [batch_size, experts_hidden_size]，是所有专家输出的加权和
         outputs["expert_info"] = expert_info # 包含每个专家的单独输出和其他中间信息
 
         # 4. 分类
@@ -261,6 +304,77 @@ class CulturalAlignmentModel(nn.Module):
         # 预测，调用模型的 predict 方法，进行前向推理，输出分类结果、概率分布、专家权重等信息
         return self.predict(input_ids, attention_mask)
 
+
+    def save_model(self, save_path: str):
+        """
+        保存模型
+
+        Args:
+            save_path: 保存路径
+        """
+        os.makedirs(save_path, exist_ok=True)
+
+        # 保存模型状态（不包括Llama模型本身，因为它是冻结的）
+        model_state = {}
+        for name, param in self.named_parameters():
+            if param.requires_grad:  # 只保存可训练的参数（如LoRA、专家、路由器、分类头等）
+                model_state[name] = param
+
+        torch.save({
+            'model_state_dict': model_state,
+            'llama_model_state_dict': self.llama_model.state_dict(),  # 保存Llama模型
+            'args': self.args,
+        }, os.path.join(save_path, 'model.pt'))
+        # 保存参数和配置到文件
+
+        logging.info(f"Model saved to {save_path}")
+
+    def load_model(self, load_path: str):
+        """
+        加载模型，加载模型时，先加载Llama3.1主干，再加载你保存的LoRA/专家/路由器等可训练参数即可
+
+        Args:
+            load_path: 加载路径
+        """
+        checkpoint = torch.load(os.path.join(load_path, 'model.pt'), map_location=self.args.device)
+        self.llama_model.load_state_dict(checkpoint['llama_model_state_dict'])  # 恢复Llama模型
+        model_state = checkpoint['model_state_dict']
+        self.load_state_dict(model_state, strict=False)
+
+
+        logging.info(f"Model loaded from {load_path}")
+
+    def get_trainable_parameters(self):
+        """
+        统计模型各部分参数量及可训练参数比例，便于资源分析和调优
+        """
+        # Llama LoRA参数
+        llama_total = sum(p.numel() for p in self.llama_model.parameters())
+        llama_trainable = sum(p.numel() for p in self.llama_model.parameters() if p.requires_grad)
+
+        # 路由器参数
+        router_params = sum(p.numel() for p in self.router.parameters() if p.requires_grad)
+
+        # 专家层参数
+        expert_params = sum(p.numel() for p in self.expert_layer.parameters() if p.requires_grad)
+
+        # 分类器参数
+        classifier_params = sum(p.numel() for p in self.classifier.parameters() if p.requires_grad)
+
+        total_trainable = llama_trainable + router_params + expert_params + classifier_params
+        total_params = llama_total + router_params + expert_params + classifier_params
+
+        return {
+            "llama_trainable": llama_trainable,
+            "llama_total": llama_total,
+            "router_params": router_params,
+            "expert_params": expert_params,
+            "classifier_params": classifier_params,
+            "total_trainable": total_trainable,
+            "total_params": total_params,
+            "trainable_percentage": total_trainable / total_params * 100
+        }
+    
     def get_expert_utilization_stats(self, dataloader) -> Dict[str, torch.Tensor]:
         """
         分析整个数据集在推理时，各专家的利用率情况，输出统计信息。
@@ -301,89 +415,3 @@ class CulturalAlignmentModel(nn.Module):
 
         return stats # 字典类型，用于分析专家分配是否均衡，是否有“死专家”或过度集中的现象
 
-    def save_model(self, save_path: str):
-        """
-        保存模型
-
-        Args:
-            save_path: 保存路径
-        """
-        os.makedirs(save_path, exist_ok=True)
-
-        # 保存模型状态（不包括Llama模型本身，因为它是冻结的）
-        model_state = {}
-        for name, param in self.named_parameters():
-            if param.requires_grad:  # 只保存可训练的参数（如LoRA、专家、路由器、分类头等）
-                model_state[name] = param
-
-        torch.save({
-            'model_state_dict': model_state,
-            'args': self.args,
-        }, os.path.join(save_path, 'model.pt')) # 保存参数和配置到文件
-
-        logging.info(f"Model saved to {save_path}")
-
-    def load_model(self, load_path: str):
-        """
-        加载模型，加载模型时，先加载Llama3.1主干，再加载你保存的LoRA/专家/路由器等可训练参数即可
-
-        Args:
-            load_path: 加载路径
-        """
-        checkpoint = torch.load(os.path.join(load_path, 'model.pt'), map_location=self.args.device)
-
-        # 只加载可训练参数【Llama3.1 主干参数不需要重复保存和加载，在模型初始化时已经加载】
-        model_state = checkpoint['model_state_dict']
-        self.load_state_dict(model_state, strict=False)
-
-        logging.info(f"Model loaded from {load_path}")
-
-    def get_trainable_parameters(self):
-        """
-        统计模型各部分参数量及可训练参数比例，便于资源分析和调优
-        """
-        # Llama LoRA参数
-        llama_total = sum(p.numel() for p in self.llama_model.parameters())
-        llama_trainable = sum(p.numel() for p in self.llama_model.parameters() if p.requires_grad)
-
-        # 路由器参数
-        router_params = sum(p.numel() for p in self.router.parameters() if p.requires_grad)
-
-        # 专家层参数
-        expert_params = sum(p.numel() for p in self.expert_layer.parameters() if p.requires_grad)
-
-        # 分类器参数
-        classifier_params = sum(p.numel() for p in self.classifier.parameters() if p.requires_grad)
-
-        total_trainable = llama_trainable + router_params + expert_params + classifier_params
-        total_params = llama_total + router_params + expert_params + classifier_params
-
-        return {
-            "llama_trainable": llama_trainable,
-            "llama_total": llama_total,
-            "router_params": router_params,
-            "expert_params": expert_params,
-            "classifier_params": classifier_params,
-            "total_trainable": total_trainable,
-            "total_params": total_params,
-            "trainable_percentage": total_trainable / total_params * 100
-        }
-
-class CulturalAlignmentModelWithAdaptiveRouter(CulturalAlignmentModel):
-    """
-    使用自适应路由器的文化对齐模型
-    """
-
-    def __init__(self, args: ModelArgs):
-        super().__init__(args)
-
-        # 替换为自适应路由器
-        llama_hidden_size = self.llama_model.config.hidden_size
-        self.router = AdaptiveRouter(
-            input_dim=llama_hidden_size,
-            num_experts=args.num_experts,
-            hidden_dim=args.router_hidden_size,
-            dropout=args.lora_dropout
-        )
-
-        logging.info("Model initialized with adaptive router")

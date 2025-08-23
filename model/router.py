@@ -27,36 +27,36 @@ class ExpertRouter(nn.Module):
     所有专家都参与计算，通过softmax输出每个专家的权重，最后加权求和
     """
 
-    def __init__(self, input_dim: int, num_experts: int = 6, hidden_dim: int = 512, dropout: float = 0.1):
+    def __init__(self, router_input_dim: int, num_experts: int = 6, router_hidden_dim: int = 512, dropout: float = 0.1):
         """
         初始化路由模块
 
         Args:
-            input_dim: 输入特征维度（来自Llama的hidden_size）
+            router_input_dim: 输入特征维度（来自Llama的hidden_size）
             num_experts: 专家数量，默认为6
-            hidden_dim: 路由网络的隐藏层维度
+            router_hidden_dim: 路由网络的隐藏层维度
             dropout: dropout概率
         """
         super().__init__()
-        self.input_dim = input_dim
+        self.input_dim = router_input_dim
         self.num_experts = num_experts
-        self.hidden_dim = hidden_dim
+        self.hidden_dim = router_hidden_dim
 
         # 路由网络：多层感知机
         self.router_network = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
+            nn.Linear(router_input_dim, router_hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.Linear(router_hidden_dim, router_hidden_dim // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim // 2, num_experts)
+            nn.Linear(router_hidden_dim // 2, num_experts)
         )
 
         # 初始化权重
         self._init_weights()
 
-        logging.info(f"Full Expert Router initialized: {input_dim} -> {num_experts} experts (all experts participate)")
+        logging.info(f"Full Expert Router initialized: {router_input_dim} -> {num_experts} experts (all experts participate)")
 
     def _init_weights(self):
         """
@@ -156,14 +156,14 @@ class AdaptiveRouter(ExpertRouter):
     自适应路由器，可以根据输入动态调整路由策略
     """
 
-    def __init__(self, input_dim: int, num_experts: int = 6, hidden_dim: int = 512, dropout: float = 0.1):
-        super().__init__(input_dim, num_experts, hidden_dim, dropout)
+    def __init__(self, router_input_dim: int, num_experts: int = 6, router_hidden_dim: int = 512, dropout: float = 0.1):
+        super().__init__(router_input_dim, num_experts, router_hidden_dim, dropout)
 
         # 添加一个温度预测网络
         self.temperature_network = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim // 4),
+            nn.Linear(router_input_dim, router_hidden_dim // 4),
             nn.ReLU(),
-            nn.Linear(hidden_dim // 4, 1),
+            nn.Linear(router_hidden_dim // 4, 1),
             nn.Sigmoid()  # 输出0-1之间的值
         )
 
