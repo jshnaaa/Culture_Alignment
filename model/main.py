@@ -1,6 +1,8 @@
 import logging
 import os
 from typing import Dict, List, Optional
+import json
+from collections import defaultdict
 
 import torch
 import torch.nn as nn
@@ -163,10 +165,16 @@ class CulturalAlignmentModel(nn.Module):
         # 损失函数
         self.criterion = nn.CrossEntropyLoss()
 
+        # 获取数据集配置
+        self.dataset_config = args.get_dataset_config()
+
         # 初始化分类头权重
         self._init_classifier_weights()
 
         logging.info(f"Cultural Alignment Model initialized")
+        logging.info(f"Dataset type: {self.dataset_config['dataset_type']}")
+        logging.info(f"Loss type: {self.dataset_config['loss_type']}")
+        logging.info(f"Output type: {self.dataset_config['output_type']}")
         logging.info(f"Llama hidden size: {llama_hidden_size}")
         logging.info(f"Number of experts: {args.num_experts}")
         logging.info(f"Expert hidden size: {args.experts_hidden_size}")
@@ -187,11 +195,75 @@ class CulturalAlignmentModel(nn.Module):
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
+    def js_divergence_loss(self, pred_probs: torch.Tensor, target_probs: torch.Tensor) -> torch.Tensor:
+        """
+        计算JS散度损失 (1 - JS散度)
+
+        Args:
+            pred_probs: 预测的概率分布 [batch_size, num_classes]
+            target_probs: 目标概率分布 [batch_size, num_classes]
+
+        Returns:
+            js_loss: JS散度损失
+        """
+        # 确保概率分布归一化
+        pred_probs = F.softmax(pred_probs, dim=-1)
+        target_probs = F.softmax(target_probs, dim=-1)
+
+        # 计算中间分布M = (P + Q) / 2
+        m = (pred_probs + target_probs) / 2
+
+        # 计算KL散度 KL(P||M) 和 KL(Q||M)
+        kl_pm = F.kl_div(torch.log(pred_probs + 1e-8), m, reduction='none').sum(dim=-1)
+        kl_qm = F.kl_div(torch.log(target_probs + 1e-8), m, reduction='none').sum(dim=-1)
+
+        # JS散度 = 0.5 * (KL(P||M) + KL(Q||M))
+        js_divergence = 0.5 * (kl_pm + kl_qm)
+
+        # 返回1 - JS散度作为损失（越相似损失越小）
+        js_loss = 1 - js_divergence
+
+        return js_loss.mean()
+
+    def parse_global_opinions_target(self, target_data: List[str]) -> torch.Tensor:
+        """
+        解析global opinions数据集的目标数据
+
+        Args:
+            target_data: 字符串形式的目标数据列表
+
+        Returns:
+            target_probs: 解析后的概率分布 [batch_size, num_classes]
+        """
+        batch_size = len(target_data)
+        target_probs = torch.zeros(batch_size, self.args.num_classes, device=self.args.device)
+
+        for i, target_str in enumerate(target_data):
+            try:
+                # 解析字符串格式的数据
+                target_dict = eval(target_str) if isinstance(target_str, str) else target_str
+
+                # 提取概率分布（假设只取第一个国家的数据）
+                if isinstance(target_dict, dict):
+                    for country, probs in target_dict.items():
+                        if isinstance(probs, list) and len(probs) == self.args.num_classes:
+                            target_probs[i] = torch.tensor(probs, dtype=torch.float32, device=self.args.device)
+                            break
+
+            except Exception as e:
+                logging.warning(f"Failed to parse target data at index {i}: {e}")
+                # 如果解析失败，使用均匀分布
+                target_probs[i] = torch.ones(self.args.num_classes, device=self.args.device) / self.args.num_classes
+
+        return target_probs
+
 
     def forward(self,
                 input_ids: torch.Tensor,
                 attention_mask: torch.Tensor,
-                labels: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
+                labels: Optional[torch.Tensor] = None,
+                target_probs: Optional[torch.Tensor] = None,
+                raw_responses: Optional[List[str]] = None) -> Dict[str, torch.Tensor]:
         """
         前向传播，训练阶段
 
@@ -230,9 +302,29 @@ class CulturalAlignmentModel(nn.Module):
         outputs["logits"] = logits # 每一行为各类别的未归一化分数
 
         # 5. 计算损失
-        if labels is not None:
-            # 主任务损失（分类损失），交叉熵损失，衡量分类准确性
-            classification_loss = self.criterion(logits, labels)
+        if labels is not None or target_probs is not None or raw_responses is not None:
+            # 根据数据集类型计算主任务损失
+            if self.dataset_config["loss_type"] == "classification":
+                # CulturalBench数据集：分类损失
+                if labels is not None:
+                    classification_loss = self.criterion(logits, labels)
+                else:
+                    raise ValueError("Labels required for classification loss")
+
+            elif self.dataset_config["loss_type"] == "js_divergence":
+                # Global Opinions数据集：JS散度损失
+                if target_probs is not None:
+                    classification_loss = self.js_divergence_loss(logits, target_probs)
+                elif raw_responses is not None:
+                    # 解析原始响应数据
+                    parsed_target_probs = self.parse_global_opinions_target(raw_responses)
+                    classification_loss = self.js_divergence_loss(logits, parsed_target_probs)
+                else:
+                    raise ValueError("Target probabilities or raw responses required for JS divergence loss")
+
+            else:
+                raise ValueError(f"Unknown loss type: {self.dataset_config['loss_type']}")
+
             outputs["classification_loss"] = classification_loss
 
             # 负载均衡损失，鼓励路由器均匀分配专家，防止只用少数专家

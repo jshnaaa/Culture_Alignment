@@ -1,11 +1,14 @@
 from dataclasses import dataclass, field  # 导入 field
-
+from typing import Dict, Any
 
 import torch
 
 
 @dataclass
 class ModelArgs:
+    # Dataset configuration
+    dataset_type: str = "culturalbench"  # "culturalbench", "globalopinions", "culturebank"
+
     # Model paths
     llama_model_path: str = "/root/autodl-tmp/CultureMoE/Culture_Alignment/Meta-Llama-3.1-8B-Instruct"
 
@@ -14,7 +17,7 @@ class ModelArgs:
     experts_hidden_size: int = 512
     experts_output_dim: int = 256
     router_hidden_size: int = 512
-    num_classes: int = 2  # TRUE/FALSE classification
+    num_classes: int = 2  # TRUE/FALSE classification for culturalbench
 
     # LoRA configuration
     lora_r: int = 8
@@ -51,4 +54,37 @@ class ModelArgs:
     def __post_init__(self):
         if self.target_modules is None:
             self.target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+
+        # 根据数据集类型自动配置参数
+        self._configure_dataset_specific_params()
+
+    def _configure_dataset_specific_params(self):
+        """根据数据集类型配置特定参数"""
+        if self.dataset_type == "culturalbench":
+            self.num_classes = 2  # TRUE/FALSE binary classification
+            self.loss_type = "classification"
+            self.output_type = "classification"
+
+        elif self.dataset_type == "globalopinions":
+            self.num_classes = 5  # ['Very favorable', 'Somewhat favorable', 'Somewhat unfavorable', 'Very unfavorable', 'DK/Refused']
+            self.loss_type = "js_divergence"
+            self.output_type = "probability_distribution"
+
+        elif self.dataset_type == "culturebank":
+            # 预留给未来的数据集
+            self.num_classes = None  # 待定义
+            self.loss_type = "to_be_defined"
+            self.output_type = "to_be_defined"
+
+        else:
+            raise ValueError(f"Unknown dataset type: {self.dataset_type}")
+
+    def get_dataset_config(self) -> Dict[str, Any]:
+        """获取当前数据集的配置信息"""
+        return {
+            "dataset_type": self.dataset_type,
+            "num_classes": self.num_classes,
+            "loss_type": self.loss_type,
+            "output_type": self.output_type
+        }
 
